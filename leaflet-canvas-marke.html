@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css"
+    />
+    <link rel="stylesheet" href="/css/blinkmarker.css" />
+    <script src="/js/rbush.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"></script>
+
+    <!-- 引入leaflet-canvas-marker插件,已解决了缩放时飘的问题 -->
+    <!-- <script src="/js/leaflet.canvas-markers.js"></script> -->
+    <script src="/js/leaflet.canvas-markers2.js"></script>
+    <!-- 高亮 -->
+    <script src="/js/blinkmarker.js"></script>
+    <style>
+      #map {
+        width: 100%;
+        height: 100vh;
+      }
+
+      .coordinate {
+        position: absolute;
+        bottom: 10px;
+        right: 50%;
+        z-index: 999;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="map"></div>
+    <script>
+      /**
+       *1.实现拖拽站点移动
+       *2.在站点下面显示站点名字
+       *3.站点高亮
+       */
+      var map = L.map("map", {
+        preferCanvas: true, //使用canvas模式渲染矢量图形
+      }).setView([28.19, 112.98], 6);
+      const osm = L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }
+      );
+      osm.addTo(map);
+
+      // 初始化canvas layer
+      var ciLayer = L.canvasIconLayer({}).addTo(map);
+
+      class LayerCanvas {
+        mapMarker = {};
+        mapIcons = {};
+        removeIconMarkers = [];
+        isTouch = { isUp: false };
+
+        constructor({ map, ciLayer }) {
+          this.map = map;
+          this.ciLayer = ciLayer;
+        }
+        // 鼠标经过到点会触发
+        mousemoveListener(e, ret) {
+          const that = this;
+          const { lat, lng } = e.latlng;
+          const marker = ret[0].data;
+          const { lat: la, lng: ln } = marker.getLatLng();
+
+          // 判断地图上有没有这个marker并且经纬度要相同并且没有被鼠标按下
+          if (
+            !map.hasLayer(marker) &&
+            Math.floor(lat) === Math.floor(la) &&
+            Math.floor(lng) === Math.floor(ln) &&
+            !that.isTouch.isUp
+          ) {
+            // 设置图标
+            marker.setIcon(this.mapIcons["green"]);
+            marker.addTo(this.map);
+            // 方便删除
+            that.removeIconMarkers.push(marker);
+
+            // 绑定事件
+            marker.on("mousedown", function () {
+              // 设为true，防止拖拽触发mouseout
+              that.isTouch.isUp = true;
+              // 移除画布中的marker
+              that.ciLayer.removeLayer(this);
+            });
+            marker.on("mouseup", function () {
+              // 设置false 让鼠标离开时移除地图上icon
+              that.isTouch.isUp = false;
+              // 添加画布中的marker
+              that.ciLayer.addLayer(this);
+            });
+            marker.on("mouseout", function () {
+              if (that.isTouch.isUp) return;
+              // 移除icon
+              setTimeout(() => {
+                that.onRemoveIconMarker();
+              }, 60);
+            });
+          }
+        }
+        // 删除marker icon
+        onRemoveIconMarker() {
+          this.removeIconMarkers.forEach((marker) => marker.remove());
+          this.removeIconMarkers = [];
+        }
+        // 初始化事件
+        initEvent() {
+          this.ciLayer.addOnMousemoveListener(
+            this.mousemoveListener.bind(this)
+          );
+        }
+        // 初始化icon
+        initIcons() {
+          const icons = [
+            { name: "blue", url: "/imgs/blue_point.png" },
+            { name: "green", url: "/imgs/green_point.png" },
+            { name: "yellow", url: "/imgs/yellow_point.png" },
+            { name: "rainfall", url: "/imgs/rainfall.png" },
+            { name: "reservoir", url: "/imgs/reservoir.png" },
+            { name: "water", url: "/imgs/water_level.png" },
+          ];
+          const obj = {};
+
+          for (let i = 0; i < icons.length; i++) {
+            obj[icons[i].name] = L.icon({
+              iconUrl: icons[i].url,
+              iconSize: [14, 14],
+              iconAnchor: [7, 7],
+            });
+          }
+          this.mapIcons = obj;
+        }
+        // 初始化marker
+        initMarker() {
+          const that = this;
+          const markers = [];
+          const mapMarker = {};
+          const icon = this.mapIcons["blue"];
+          for (var i = 0; i < 200; i++) {
+            var lat = 28.19 + (Math.random() - Math.random()) * 10;
+            var lng = 112.98 + (Math.random() - Math.random()) * 10;
+            var id = i;
+
+            var marker = L.marker([lat, lng], {
+              icon: icon,
+              draggable: true,
+            });
+
+            marker.customId = id;
+            markers.push(marker);
+            mapMarker[id] = { lat, lng, marker };
+          }
+          this.ciLayer.addLayers(markers);
+          this.mapMarker = mapMarker;
+        }
+        init() {
+          this.initIcons();
+          this.initMarker();
+          this.initEvent();
+        }
+      }
+      const l = new LayerCanvas({ map, ciLayer });
+      l.init();
+      // 站点高亮
+      L.blinkMarker([28.19, 112.98], {
+        iconSize: [14, 14],
+        color: "green",
+        speedTime: 1,
+      }).addTo(map);
+    </script>
+  </body>
+</html>
