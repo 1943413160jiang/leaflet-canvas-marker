@@ -268,7 +268,9 @@ function layerFactory(L) {
       );
       this._drawText("站点名字", x, y, options.iconSize[0]);
     },
+
     _drawText(text, x, y, size) {
+      // 自定义text
       const { _context } = this;
       _context.strokeStyle = "rgba(255,255,255,1)";
       _context.strokeText(text, x - size, y + size * 2);
@@ -358,9 +360,6 @@ function layerFactory(L) {
       this._canvas.height = size.y;
 
       this._context = this._canvas.getContext("2d");
-      // 自定义text
-      this._context.lineWidth = 2;
-      this._context.font = "16px serif";
 
       var animated = this._map.options.zoomAnimation && L.Browser.any3d;
       L.DomUtil.addClass(
