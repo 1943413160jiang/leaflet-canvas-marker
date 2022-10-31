@@ -20,6 +20,7 @@
     <script src="/js/leaflet-geoman.min.js"></script>
     <script src="/js/leaflet-freedraw.iife.js"></script>
     <script src="/js/turf.min.js"></script>
+    <script src="/js/xe-utils.js"></script>
     <style>
       #map {
         width: 100%;
@@ -56,14 +57,14 @@
       var map = L.map("map", {
         preferCanvas: true, //使用canvas模式渲染矢量图形
       }).setView([28.19, 112.98], 6);
-      const osm = L.tileLayer(
-        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        }
-      );
-      osm.addTo(map);
+      // const osm = L.tileLayer(
+      //   "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      //   {
+      //     attribution:
+      //       '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      //   }
+      // );
+      // osm.addTo(map);
 
       // 初始化canvas layer
       var ciLayer = L.canvasIconLayer({}).addTo(map);
@@ -77,11 +78,7 @@
         position: "topleft",
         drawCircle: false,
       });
-      map.pm.Toolbar.createCustomControl({
-        name: "freeDraw",
-        onClick: toggleFreeDraw,
-        className: "icon-freedraw",
-      });
+
       map.pm.setGlobalOptions({
         limitMarkersToCount: 1,
       });
@@ -91,10 +88,30 @@
         mapIcons = {};
         removeIconMarkers = [];
         isTouch = { isUp: false };
+        timer = null;
+        timer2 = null;
+        freeDrawEnabled = false;
 
-        constructor({ map, ciLayer }) {
+        constructor({ map, ciLayer, freeDraw }) {
           this.map = map;
           this.ciLayer = ciLayer;
+          this.freeDraw = freeDraw;
+        }
+        //切换圈画
+        toggleFreeDraw() {
+          const flag = this.freeDrawEnabled;
+          console.log(flag);
+          if (flag) {
+            freeDraw.mode(FreeDraw.NONE);
+          } else {
+            freeDraw.mode(FreeDraw.CREATE);
+          }
+          this.freeDrawEnabled = !flag;
+        }
+        // 判断一个点是否在多边形内
+        isInPolygon(point, rect) {
+          const poly = turf.polygon([rect]);
+          return turf.booleanPointInPolygon(point, poly);
         }
         // 鼠标经过到点会触发
         mousemoveListener(e, ret) {
@@ -132,22 +149,43 @@
             marker.on("mouseout", function () {
               if (that.isTouch.isUp) return;
               // 移除icon
-              setTimeout(() => {
-                that.onRemoveIconMarker();
-              }, 60);
+              that.onRemoveIconMarker();
             });
           }
         }
         // 删除marker icon
         onRemoveIconMarker() {
-          this.removeIconMarkers.forEach((marker) => marker.remove());
-          this.removeIconMarkers = [];
+          if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+          }
+          this.timer = setTimeout(() => {
+            this.removeIconMarkers.forEach((marker) => marker.remove());
+            this.removeIconMarkers = [];
+          });
         }
         // 初始化事件
         initEvent() {
           this.ciLayer.addOnMousemoveListener(
             this.mousemoveListener.bind(this)
           );
+          this.freeDraw.on("markers", (e) => {
+            if (e.eventType === "create" && e.latLngs.length) {
+              var polygon = L.polygon(e.latLngs).addTo(map);
+              freeDraw.clear();
+              const pt = turf.point([28.19, 112.98]);
+              const latlngs = e.latLngs[0].map((item) => [item.lat, item.lng]);
+              console.log(this.isInPolygon(pt, latlngs));
+            }
+          });
+        }
+        // 初始化draw
+        initDraw() {
+          this.map.pm.Toolbar.createCustomControl({
+            name: "freeDraw",
+            onClick: this.toggleFreeDraw,
+            className: "icon-freedraw",
+          });
         }
         // 初始化icon
         initIcons() {
@@ -176,7 +214,7 @@
           const markers = [];
           const mapMarker = {};
           const icon = this.mapIcons["blue"];
-          for (var i = 0; i < 200; i++) {
+          for (var i = 0; i < 2000; i++) {
             var lat = 28.19 + (Math.random() - Math.random()) * 10;
             var lng = 112.98 + (Math.random() - Math.random()) * 10;
             var id = i;
@@ -196,44 +234,47 @@
         init() {
           this.initIcons();
           this.initMarker();
+          this.initDraw();
           this.initEvent();
         }
       }
-      const l = new LayerCanvas({ map, ciLayer });
+      const l = new LayerCanvas({ map, ciLayer, freeDraw });
       l.init();
 
       // 站点高亮
       L.blinkMarker([28.19, 112.98], {
         iconSize: [14, 14],
-        color: "green",
+        color: "red",
         speedTime: 1,
+        iconUrl: "/imgs/water_level.png",
+        draggable: true,
       }).addTo(map);
 
-      var freeDrawEnabled = false;
+      // var freeDrawEnabled = false;
 
-      function toggleFreeDraw() {
-        if (freeDrawEnabled) {
-          freeDraw.mode(FreeDraw.NONE);
-        } else {
-          freeDraw.mode(FreeDraw.CREATE);
-        }
-        freeDrawEnabled = !freeDrawEnabled;
-      }
+      // function toggleFreeDraw() {
+      //   if (freeDrawEnabled) {
+      //     freeDraw.mode(FreeDraw.NONE);
+      //   } else {
+      //     freeDraw.mode(FreeDraw.CREATE);
+      //   }
+      //   freeDrawEnabled = !freeDrawEnabled;
+      // }
 
-      freeDraw.on("markers", (e) => {
-        if (e.eventType === "create" && e.latLngs.length) {
-          var polygon = L.polygon(e.latLngs).addTo(map);
-          freeDraw.clear();
-          const pt = turf.point([28.19, 112.98]);
-          const latlngs = e.latLngs[0].map((item) => [item.lat, item.lng]);
-          // console.log(isInPolygon(pt, latlngs));
-        }
-      });
+      // freeDraw.on("markers", (e) => {
+      //   if (e.eventType === "create" && e.latLngs.length) {
+      //     var polygon = L.polygon(e.latLngs).addTo(map);
+      //     freeDraw.clear();
+      //     const pt = turf.point([28.19, 112.98]);
+      //     const latlngs = e.latLngs[0].map((item) => [item.lat, item.lng]);
+      //     // console.log(isInPolygon(pt, latlngs));
+      //   }
+      // });
 
-      function isInPolygon(point, rect) {
-        const poly = turf.polygon([rect]);
-        return turf.booleanPointInPolygon(point, poly);
-      }
+      // function isInPolygon(point, rect) {
+      //   const poly = turf.polygon([rect]);
+      //   return turf.booleanPointInPolygon(point, poly);
+      // }
     </script>
   </body>
 </html>

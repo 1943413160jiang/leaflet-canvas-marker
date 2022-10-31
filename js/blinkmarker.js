@@ -1,9 +1,13 @@
 L.blinkMarker = function (point, property) {
   // 使用js标签,便于操作,这个temDivEle的作用是将divEle通过innerHTML的方式获取为字符串
   var tempDivEle = document.createElement("div");
+  var imgEl = document.createElement("img");
   var divEle = document.createElement("div");
   var spanEl = document.createElement("span");
   var aEl = document.createElement("a");
+
+  divEle.style = "position:relative";
+
   tempDivEle.append(divEle);
   divEle.append(spanEl);
   spanEl.append(aEl);
@@ -15,10 +19,17 @@ L.blinkMarker = function (point, property) {
   style.type = "text/css";
   document.head.appendChild(style);
   sheet = style.sheet;
+
+  if (property.iconUrl) {
+    imgEl.src = property.iconUrl;
+    imgEl.style = "width:14px;height:14px;position:absolute;top:0;left:0";
+    tempDivEle.append(imgEl);
+  }
+
   // 主体颜色
   if (property) {
     if (property.color) {
-      spanEl.style.backgroundColor = property.color;
+      spanEl.style.backgroundColor = "transparent";
       if (!property.diveColor) {
         aEl.style.boxShadow = "0 0 6px 2px " + property.color;
       }
@@ -75,10 +86,15 @@ L.blinkMarker = function (point, property) {
       );
     }
   }
-  var myIcon = L.divIcon({
+
+  const myIcon = L.divIcon({
     className: "my-div-icon",
     html: tempDivEle.innerHTML,
+    iconUrl: property.iconUrl,
   });
-  var marker = L.marker(point, { icon: myIcon, title: property.title });
+  const marker = L.marker(point, {
+    icon: myIcon,
+    draggable: property.draggable ? true : false,
+  });
   return marker;
 };
